@@ -66,36 +66,64 @@ public class SafeDevicePlugin implements FlutterPlugin, MethodCallHandler {
 
     @Override
     public void onMethodCall(MethodCall call, final Result result) {
-        if (call.method.equals("getPlatformVersion")) {
-            result.success("Android " + android.os.Build.VERSION.RELEASE);
-        } else if (call.method.equals("isJailBroken")) {
-            new Thread(() -> {
-                boolean isRooted = RootedCheck.isJailBroken(context);
-                new Handler(Looper.getMainLooper()).post(() -> result.success(isRooted));
-            }).start();
-        } else if (call.method.equals("isRealDevice")) {
-            new Thread(() -> {
-                boolean isEmulator = EmulatorCheck.isEmulator();
-                new Handler(Looper.getMainLooper()).post(() -> result.success(!isEmulator));
-            }).start();
-        } else if (call.method.equals("isOnExternalStorage")) {
-            result.success(ExternalStorageCheck.isOnExternalStorage(context));
-        } else if (call.method.equals("isDevelopmentModeEnable")) {
-            result.success(DevelopmentModeCheck.developmentModeCheck(context));
-        } else if (call.method.equals("usbDebuggingCheck")) {
-            result.success(DevelopmentModeCheck.usbDebuggingCheck(context));
-        } else if (call.method.equals("isMockLocation")) {
-            initializeLocationAssistantIfNeeded();
-            if (locationAssistantListener.isMockLocationsDetected()) {
-                result.success(true);
-            } else if (locationAssistantListener.getLatitude() != null && locationAssistantListener.getLongitude() != null) {
-                result.success(false);
-            } else {
-                result.success(true);
-            }
-        } else {
-            result.notImplemented();
+        switch (call.method) {
+            case "getPlatformVersion":
+                result.success("Android " + android.os.Build.VERSION.RELEASE);
+                break;
+            case "isJailBroken":
+                runOnBackgroundThread(() -> {
+                    boolean isRooted = RootedCheck.isJailBroken(context);
+                    runOnMainThread(() -> result.success(isRooted));
+                });
+                break;
+            case "isRealDevice":
+                runOnBackgroundThread(() -> {
+                    boolean isEmulator = EmulatorCheck.isEmulator();
+                    runOnMainThread(() -> result.success(!isEmulator));
+                });
+                break;
+            case "isOnExternalStorage":
+                runOnBackgroundThread(() -> {
+                    boolean isOnExternalStorage = ExternalStorageCheck.isOnExternalStorage(context);
+                    runOnMainThread(() -> result.success(isOnExternalStorage));
+                });
+                break;
+            case "isDevelopmentModeEnable":
+                runOnBackgroundThread(() -> {
+                    boolean isDevelopmentModeEnabled = DevelopmentModeCheck.developmentModeCheck(context);
+                    runOnMainThread(() -> result.success(isDevelopmentModeEnabled));
+                });
+                break;
+            case "usbDebuggingCheck":
+                runOnBackgroundThread(() -> {
+                    boolean isUsbDebuggingEnabled = DevelopmentModeCheck.usbDebuggingCheck(context);
+                    runOnMainThread(() -> result.success(isUsbDebuggingEnabled));
+                });
+                break;
+            case "isMockLocation":
+                initializeLocationAssistantIfNeeded();
+                runOnBackgroundThread(() -> {
+                    if (locationAssistantListener.isMockLocationsDetected()) {
+                        runOnMainThread(() -> result.success(true));
+                    } else if (locationAssistantListener.getLatitude() != null && locationAssistantListener.getLongitude() != null) {
+                        runOnMainThread(() -> result.success(false));
+                    } else {
+                        runOnMainThread(() -> result.success(true));
+                    }
+                });
+                break;
+            default:
+                result.notImplemented();
+                break;
         }
+    }
+
+    private void runOnBackgroundThread(Runnable task) {
+        new Thread(task).start();
+    }
+
+    private void runOnMainThread(Runnable task) {
+        new Handler(Looper.getMainLooper()).post(task);
     }
 }
 
